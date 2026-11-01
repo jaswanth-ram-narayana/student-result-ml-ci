@@ -25,6 +25,18 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+# Prometheus monitoring metrics
+REQUEST_COUNT = Counter(
+    "app_requests_total",
+    "Total number of HTTP requests",
+    ["method", "endpoint", "http_status"]
+)
+
+REQUEST_LATENCY = Histogram(
+    "app_request_latency_seconds",
+    "HTTP request latency in seconds",
+    ["endpoint"]
+)
 
 # Model configuration
 MODEL_PATH = Path("student_result_model.pkl")
@@ -128,12 +140,19 @@ def home():
 
 # Health monitoring endpoint
 @app.get("/health")
+
 def health_check():
     logger.info("Health check requested")
 
     return jsonify({
         "status": "healthy",
         "service": "student-result-prediction"
+    }
+    # Prometheus metrics endpoint
+@app.get("/metrics")
+def metrics():
+    return generate_latest(), 200, {
+        "Content-Type": CONTENT_TYPE_LATEST
     })
 
 
