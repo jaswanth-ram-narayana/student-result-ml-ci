@@ -7,6 +7,7 @@ from pathlib import Path
 import joblib
 import pandas as pd
 from flask import Flask, jsonify, request, Response
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 from prometheus_client import (
     Counter,
