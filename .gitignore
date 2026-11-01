@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+metrics.json
+student_result_model.pkl
+student_results.csv
