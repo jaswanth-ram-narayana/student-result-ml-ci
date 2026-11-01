@@ -6,7 +6,13 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
+from prometheus_client import (
+    Counter,
+    Histogram,
+    generate_latest,
+    CONTENT_TYPE_LATEST
+)
 
 app = Flask(__name__)
 
@@ -28,6 +34,19 @@ FEATURES = [
     "previous_score"
 ]
 
+# Prometheus monitoring metrics
+REQUEST_COUNT = Counter(
+    "student_api_requests_total",
+    "Total number of API requests",
+    ["method", "endpoint", "status"]
+)
+
+REQUEST_LATENCY = Histogram(
+    "student_api_request_duration_seconds",
+    "API request processing time",
+    ["method", "endpoint"]
+)
+
 
 # Request monitoring middleware
 @app.before_request
@@ -35,6 +54,7 @@ def start_request_logging():
     request.request_id = request.headers.get(
         "X-Request-ID", str(uuid.uuid4())
     )
+
     request.start_time = time.perf_counter()
 
     logger.info(
@@ -47,11 +67,23 @@ def start_request_logging():
 
 @app.after_request
 def log_request_response(response):
-    duration_ms = (
-        time.perf_counter() - request.start_time
-    ) * 1000
+    duration = time.perf_counter() - request.start_time
+    duration_ms = duration * 1000
 
     response.headers["X-Request-ID"] = request.request_id
+
+    # Update Prometheus request counter
+    REQUEST_COUNT.labels(
+        request.method,
+        request.path,
+        str(response.status_code)
+    ).inc()
+
+    # Record request processing time
+    REQUEST_LATENCY.labels(
+        request.method,
+        request.path
+    ).observe(duration)
 
     log_level = (
         logging.WARNING
@@ -102,6 +134,15 @@ def health_check():
         "status": "healthy",
         "service": "student-result-prediction"
     })
+
+
+# Prometheus metrics endpoint
+@app.get("/metrics")
+def metrics():
+    return Response(
+        generate_latest(),
+        mimetype=CONTENT_TYPE_LATEST
+    )
 
 
 # Student result prediction endpoint
