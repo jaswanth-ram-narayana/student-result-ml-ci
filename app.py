@@ -7,8 +7,6 @@ from pathlib import Path
 import joblib
 import pandas as pd
 from flask import Flask, jsonify, request, Response
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-
 from prometheus_client import (
     Counter,
     Histogram,
@@ -25,18 +23,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-# Prometheus monitoring metrics
-REQUEST_COUNT = Counter(
-    "app_requests_total",
-    "Total number of HTTP requests",
-    ["method", "endpoint", "http_status"]
-)
-
-REQUEST_LATENCY = Histogram(
-    "app_request_latency_seconds",
-    "HTTP request latency in seconds",
-    ["endpoint"]
-)
 
 # Model configuration
 MODEL_PATH = Path("student_result_model.pkl")
@@ -48,7 +34,7 @@ FEATURES = [
     "previous_score"
 ]
 
-# Prometheus metrics
+# Prometheus monitoring metrics
 REQUEST_COUNT = Counter(
     "student_api_requests_total",
     "Total number of API requests",
@@ -86,13 +72,14 @@ def log_request_response(response):
 
     response.headers["X-Request-ID"] = request.request_id
 
-    # Update Prometheus metrics
+    # Update Prometheus request counter
     REQUEST_COUNT.labels(
         request.method,
         request.path,
-        response.status_code
+        str(response.status_code)
     ).inc()
 
+    # Record request processing time
     REQUEST_LATENCY.labels(
         request.method,
         request.path
@@ -140,19 +127,12 @@ def home():
 
 # Health monitoring endpoint
 @app.get("/health")
-
 def health_check():
     logger.info("Health check requested")
 
     return jsonify({
         "status": "healthy",
         "service": "student-result-prediction"
-    }
-    # Prometheus metrics endpoint
-@app.get("/metrics")
-def metrics():
-    return generate_latest(), 200, {
-        "Content-Type": CONTENT_TYPE_LATEST
     })
 
 
@@ -174,7 +154,9 @@ def predict():
         data = request.get_json(silent=True)
 
         if not data:
-            logger.warning("Prediction request has no JSON body")
+            logger.warning(
+                "Prediction request has no JSON body"
+            )
 
             return jsonify({
                 "error": "JSON request body is required"
